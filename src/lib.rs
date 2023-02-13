@@ -6,12 +6,11 @@ use std::{
 use dioxus::prelude::*;
 use once_cell::sync::OnceCell;
 use postcard::to_allocvec;
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 static STORAGE: OnceCell<PersistantStorageContext> = OnceCell::new();
 
-pub fn use_init_storage(cx: Scope) {
+pub fn use_init_storage(cx: &ScopeState) {
     use_context_provider(cx, || {
         #[cfg(target_arch = "wasm32")]
         let storage: Arc<RwLock<PersistantStorage>> = Arc::new(RwLock::new(serde_from_string(
@@ -38,7 +37,9 @@ pub fn get_data() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let serialized = serde_to_string(&*STORAGE.get().unwrap().storage.read().unwrap());
-        return format!(r#"<div id="dioxus-storage" data-serialized="{serialized}"></div>"#);
+        return format!(
+            r#"<div id="dioxus-storage" data-serialized="{serialized}" hidden="true"></div>"#
+        );
     }
     #[cfg(target_arch = "wasm32")]
     return "".to_string();
@@ -83,36 +84,33 @@ fn serde_from_string<T: for<'a> Deserialize<'a>>(value: &str) -> T {
 }
 
 pub fn server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
-    cx: Scope,
-    name: &'static str,
+    cx: &ScopeState,
     init: impl FnOnce() -> T,
 ) -> T {
     let context: PersistantStorageContext = cx
         .consume_context()
         .expect("use_server_state must be called inside a context that contains InitStorage");
     #[cfg(target_arch = "wasm32")]
-    return deserialize_server_state(context, name);
+    return deserialize_server_state(context);
     #[cfg(not(target_arch = "wasm32"))]
-    return serialize_server_state(context, name, init);
+    return serialize_server_state(context, init);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn serialize_server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
     context: PersistantStorageContext,
-    name: &'static str,
     init: impl FnOnce() -> T,
 ) -> T {
     let value = init();
-    context.set(name, &value);
+    context.set(&value);
     value
 }
 
 #[cfg(target_arch = "wasm32")]
 fn deserialize_server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
     context: PersistantStorageContext,
-    name: &'static str,
 ) -> T {
-    context.get(name).expect("state not found")
+    context.get().expect("state not found")
 }
 
 #[derive(Clone, Debug)]
@@ -122,24 +120,27 @@ struct PersistantStorageContext {
 
 impl PersistantStorageContext {
     #[cfg(target_arch = "wasm32")]
-    fn get<T: 'static + for<'a> Deserialize<'a>>(&self, name: &str) -> Option<T> {
-        let storage = self.storage.read().ok()?;
-        let data = storage.data.get(name)?;
+    fn get<T: 'static + for<'a> Deserialize<'a>>(&self) -> Option<T> {
+        let mut storage = self.storage.write().ok()?;
+        let idx = storage.idx;
+        storage.idx += 1;
+        let data = storage.data.get(idx)?;
         let data = postcard::from_bytes(data).unwrap();
         Some(data)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set<T: 'static + Serialize>(&self, name: &str, value: &T) {
+    fn set<T: 'static + Serialize>(&self, value: &T) {
         let data = to_allocvec(&value).unwrap();
         let mut storage = self.storage.write().unwrap();
-        storage.data.insert(name.to_string(), data);
+        storage.data.push(data);
     }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct PersistantStorage {
-    data: FxHashMap<String, Vec<u8>>,
+    data: Vec<Vec<u8>>,
+    idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
