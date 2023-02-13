@@ -1,0 +1,17 @@
+[package]
+name = "dioxus-storage"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+
+[dependencies]
+dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+rustc-hash = "1.1.0"
+serde = { version = "1.0.7", features = ["derive"] }
+postcard = { version = "1.0.2", features = ["use-std"] }
+once_cell = "1.17.0"
+web-sys = { version = "0.3.61", features = ["Window", "Document", "Element"] }
+yazi = "0.1.4"
