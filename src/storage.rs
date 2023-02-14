@@ -2,8 +2,8 @@ use postcard::to_allocvec;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
+use web_sys::console;
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn serde_to_string<T: Serialize>(value: &T) -> String {
     let serialized = to_allocvec(value).unwrap();
     println!("serialized: {:?}", serialized.len());
@@ -27,18 +27,21 @@ pub fn serde_to_string<T: Serialize>(value: &T) -> String {
     as_str
 }
 
-#[cfg(target_arch = "wasm32")]
 pub fn serde_from_string<T: for<'a> Deserialize<'a>>(value: &str) -> T {
+    try_serde_from_string(value).unwrap()
+}
+
+pub fn try_serde_from_string<T: for<'a> Deserialize<'a>>(value: &str) -> Option<T> {
     let mut bytes: Vec<u8> = Vec::new();
     let mut chars = value.chars();
     while let Some(c) = chars.next() {
-        let n1 = c.to_digit(16).unwrap();
-        let c2 = chars.next().unwrap();
-        let n2 = c2.to_digit(16).unwrap();
+        let n1 = c.to_digit(16)?;
+        let c2 = chars.next()?;
+        let n2 = c2.to_digit(16)?;
         bytes.push((n1 * 16 + n2) as u8);
     }
-    let (decompressed, _) = yazi::decompress(&bytes, yazi::Format::Zlib).unwrap();
-    postcard::from_bytes(&decompressed).unwrap()
+    let (decompressed, _) = yazi::decompress(&bytes, yazi::Format::Zlib).ok()?;
+    postcard::from_bytes(&decompressed).ok()
 }
 
 #[derive(Clone, Debug, Default)]
@@ -48,7 +51,6 @@ pub struct PersistantStorageContext<T> {
 }
 
 impl<C> PersistantStorageContext<C> {
-    #[cfg(target_arch = "wasm32")]
     pub fn get<T: 'static + for<'a> Deserialize<'a>>(&self) -> Option<T> {
         let mut storage = self.storage.write().ok()?;
         let idx = storage.idx;
@@ -58,7 +60,6 @@ impl<C> PersistantStorageContext<C> {
         Some(data)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn set<T: 'static + Serialize>(&self, value: &T) {
         let data = to_allocvec(&value).unwrap();
         let mut storage = self.storage.write().unwrap();

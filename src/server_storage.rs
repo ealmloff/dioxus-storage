@@ -40,7 +40,7 @@ pub fn get_data() -> String {
     {
         let serialized = serde_to_string(&*STORAGE.get().unwrap().storage.read().unwrap());
         return format!(
-            r#"<div id="dioxus-storage" data-serialized="{serialized}" hidden="true"></div>"#
+            r#"<meta id="dioxus-storage" data-serialized="{serialized}" hidden="true"/>"#
         );
     }
     #[cfg(target_arch = "wasm32")]

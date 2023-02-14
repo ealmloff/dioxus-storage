@@ -8,11 +8,11 @@ edition = "2021"
 [lib]
 
 [dependencies]
-dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus = { path = "C:/Users/Desktop/github/dioxus/packages/dioxus" }
 rustc-hash = "1.1.0"
 serde = { version = "1.0.7", features = ["derive"] }
 postcard = { version = "1.0.2", features = ["use-std"] }
 once_cell = "1.17.0"
-web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument"] }
+web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 yazi = "0.1.4"
 wasm-bindgen = "0.2"
