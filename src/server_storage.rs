@@ -1,44 +1,80 @@
 use crate::storage::*;
-use dioxus::prelude::*;
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
+use postcard::to_allocvec;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::{
+    marker::PhantomData,
+    sync::{Arc, RwLock},
+};
 
-#[derive(Clone, Default, Debug)]
+static STORAGE: Lazy<PersistantStorageContext<ServerStorage>> = Lazy::new(|| {
+    #[cfg(target_arch = "wasm32")]
+    let storage: Arc<RwLock<PersistantStorage>> = Arc::new(RwLock::new(serde_from_string(
+        &web_sys::window()
+            .expect("should have a window")
+            .document()
+            .expect("should have a document")
+            .get_element_by_id("dioxus-storage")
+            .expect("should have a dioxus-storage element")
+            .get_attribute("data-serialized")
+            .expect("should have a dioxus-storage element with data-serialized attribute"),
+    )));
+    #[cfg(not(target_arch = "wasm32"))]
+    let storage = Arc::new(RwLock::new(PersistantStorage::default()));
+
+    PersistantStorageContext {
+        storage,
+        ..Default::default()
+    }
+});
+
+#[derive(Clone, Debug, Default)]
+pub struct PersistantStorageContext<T> {
+    pub storage: Arc<RwLock<PersistantStorage>>,
+    pub phantom: PhantomData<T>,
+}
+
+impl<C> PersistantStorageContext<C> {
+    pub fn get<T: for<'a> Deserialize<'a>>(&self) -> Option<T> {
+        let mut storage = self.storage.write().ok()?;
+        let idx = storage.idx;
+        storage.idx += 1;
+        let data = storage.data.get(idx)?;
+        let data = postcard::from_bytes(data).unwrap();
+        Some(data)
+    }
+
+    pub fn set<T: Serialize>(&self, value: &T) {
+        let data = to_allocvec(&value).unwrap();
+        let mut storage = self.storage.write().unwrap();
+        storage.data.push(data);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 struct ServerStorage;
 
-static STORAGE: OnceCell<PersistantStorageContext<ServerStorage>> = OnceCell::new();
+impl StorageBacking for ServerStorage {
+    type Key = ();
 
-pub fn use_init_storage(cx: &ScopeState) {
-    use_context_provider(cx, || {
+    fn set<T: Serialize>(_: Self::Key, value: &T) {
+        STORAGE.set(value);
+    }
+
+    #[allow(clippy::needless_return)]
+    fn get<T: for<'a> Deserialize<'a>>(_: &Self::Key) -> Option<T> {
         #[cfg(target_arch = "wasm32")]
-        let storage: Arc<RwLock<PersistantStorage>> = Arc::new(RwLock::new(serde_from_string(
-            &web_sys::window()
-                .expect("should have a window")
-                .document()
-                .expect("should have a document")
-                .get_element_by_id("dioxus-storage")
-                .expect("should have a dioxus-storage element")
-                .get_attribute("data-serialized")
-                .expect("should have a dioxus-storage element with data-serialized attribute"),
-        )));
+        return STORAGE.get();
         #[cfg(not(target_arch = "wasm32"))]
-        let storage = Arc::new(RwLock::new(PersistantStorage::default()));
-
-        let storage = PersistantStorageContext {
-            storage,
-            ..Default::default()
-        };
-        STORAGE.set(storage.clone()).unwrap();
-        storage
-    });
+        return None;
+    }
 }
 
 #[allow(clippy::needless_return)]
 pub fn get_data() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let serialized = serde_to_string(&*STORAGE.get().unwrap().storage.read().unwrap());
+        let serialized = serde_to_string(&*STORAGE.storage.read().unwrap());
         return format!(
             r#"<meta id="dioxus-storage" data-serialized="{serialized}" hidden="true"/>"#
         );
@@ -48,31 +84,23 @@ pub fn get_data() -> String {
 }
 
 pub fn server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
-    cx: &ScopeState,
     init: impl FnOnce() -> T,
 ) -> T {
-    let context: PersistantStorageContext<ServerStorage> = cx
-        .consume_context()
-        .expect("use_server_state must be called inside a context that contains InitStorage");
-    #[cfg(target_arch = "wasm32")]
-    return deserialize_server_state(context);
-    #[cfg(not(target_arch = "wasm32"))]
-    return serialize_server_state(context, init);
+    storage_entry::<ServerStorage, T>((), init)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn serialize_server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
-    context: PersistantStorageContext<ServerStorage>,
-    init: impl FnOnce() -> T,
-) -> T {
-    let value = init();
-    context.set(&value);
-    value
-}
-
-#[cfg(target_arch = "wasm32")]
-fn deserialize_server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
-    context: PersistantStorageContext<ServerStorage>,
-) -> T {
-    context.get().expect("state not found")
+#[macro_export]
+macro_rules! server_state {
+    ($f: expr) => {{
+        let r;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            r = server_state($f);
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            r = server_state(|| panic!("server state not found"));
+        }
+        r
+    }};
 }

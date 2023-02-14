@@ -1,8 +1,8 @@
+use dioxus::prelude::{use_ref, ScopeState, UseRef};
 use postcard::to_allocvec;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
-use std::sync::{Arc, RwLock};
-use web_sys::console;
+use std::fmt::{Debug, Display};
+use std::ops::{Deref, DerefMut};
 
 pub fn serde_to_string<T: Serialize>(value: &T) -> String {
     let serialized = to_allocvec(value).unwrap();
@@ -44,31 +44,150 @@ pub fn try_serde_from_string<T: for<'a> Deserialize<'a>>(value: &str) -> Option<
     postcard::from_bytes(&decompressed).ok()
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct PersistantStorageContext<T> {
-    pub storage: Arc<RwLock<PersistantStorage>>,
-    pub phantom: PhantomData<T>,
-}
-
-impl<C> PersistantStorageContext<C> {
-    pub fn get<T: 'static + for<'a> Deserialize<'a>>(&self) -> Option<T> {
-        let mut storage = self.storage.write().ok()?;
-        let idx = storage.idx;
-        storage.idx += 1;
-        let data = storage.data.get(idx)?;
-        let data = postcard::from_bytes(data).unwrap();
-        Some(data)
-    }
-
-    pub fn set<T: 'static + Serialize>(&self, value: &T) {
-        let data = to_allocvec(&value).unwrap();
-        let mut storage = self.storage.write().unwrap();
-        storage.data.push(data);
-    }
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PersistantStorage {
     pub data: Vec<Vec<u8>>,
     pub idx: usize,
+}
+
+pub trait StorageBacking {
+    type Key;
+
+    fn get<T: for<'a> Deserialize<'a>>(key: &Self::Key) -> Option<T>;
+    fn set<T: Serialize>(key: Self::Key, value: &T);
+}
+
+#[derive(Clone, Default)]
+pub struct StorageEntry<S: StorageBacking, T: Serialize + for<'a> Deserialize<'a>> {
+    key: S::Key,
+    pub(crate) data: T,
+}
+
+impl<S: StorageBacking, T: Display + Serialize + for<'a> Deserialize<'a>> Display
+    for StorageEntry<S, T>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.data.fmt(f)
+    }
+}
+
+impl<S: StorageBacking, T: Debug + Serialize + for<'a> Deserialize<'a>> Debug
+    for StorageEntry<S, T>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.data.fmt(f)
+    }
+}
+
+impl<S, T> StorageEntry<S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'a> Deserialize<'a>,
+    S::Key: Clone,
+{
+    pub fn new(key: S::Key, data: T) -> Self {
+        Self { key, data }
+    }
+
+    fn save(&self) {
+        S::set(self.key.clone(), &self.data);
+    }
+
+    pub fn write(&mut self) -> StorageEntryMut<'_, S, T> {
+        StorageEntryMut {
+            storage_entry: self,
+        }
+    }
+
+    pub fn with_mut(&mut self, f: impl FnOnce(&mut T)) {
+        f(&mut self.data);
+        self.save();
+    }
+}
+
+impl<S: StorageBacking, T: Serialize + for<'a> Deserialize<'a>> Deref for StorageEntry<S, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+pub struct StorageEntryMut<'a, S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'b> Deserialize<'b>,
+    S::Key: Clone,
+{
+    storage_entry: &'a mut StorageEntry<S, T>,
+}
+
+impl<'a, S, T> Deref for StorageEntryMut<'a, S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'b> Deserialize<'b>,
+    S::Key: Clone,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.storage_entry.data
+    }
+}
+
+impl<'a, S, T> DerefMut for StorageEntryMut<'a, S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'b> Deserialize<'b>,
+    S::Key: Clone,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.storage_entry.data
+    }
+}
+
+impl<'a, S, T> Drop for StorageEntryMut<'a, S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'b> Deserialize<'b>,
+    S::Key: Clone,
+{
+    fn drop(&mut self) {
+        self.storage_entry.save();
+    }
+}
+
+pub fn storage_entry<S: StorageBacking, T: Serialize + for<'a> Deserialize<'a>>(
+    key: S::Key,
+    init: impl FnOnce() -> T,
+) -> T {
+    S::get(&key).unwrap_or_else(|| {
+        let data = init();
+        S::set(key, &data);
+        data
+    })
+}
+
+pub fn synced_storage_entry<S, T>(key: S::Key, init: impl FnOnce() -> T) -> StorageEntry<S, T>
+where
+    S: StorageBacking,
+    T: Serialize + for<'a> Deserialize<'a>,
+    S::Key: Clone,
+{
+    let data = storage_entry::<S, T>(key.clone(), init);
+
+    StorageEntry::new(key, data)
+}
+
+pub fn use_synced_storage_entry<S, T>(
+    cx: &ScopeState,
+    key: S::Key,
+    init: impl FnOnce() -> T,
+) -> &UseRef<StorageEntry<S, T>>
+where
+    S: StorageBacking + 'static,
+    T: Serialize + for<'a> Deserialize<'a> + 'static,
+    S::Key: Clone,
+{
+    use_ref(cx, || synced_storage_entry(key, init))
 }
