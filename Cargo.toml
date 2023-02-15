@@ -8,7 +8,7 @@ edition = "2021"
 [lib]
 
 [dependencies]
-dioxus = { path = "C:/Users/Desktop/github/dioxus/packages/dioxus" }
+dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
 rustc-hash = "1.1.0"
 serde = { version = "1.0.7", features = ["derive"] }
 postcard = { version = "1.0.2", features = ["use-std"] }
