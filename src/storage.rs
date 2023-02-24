@@ -89,7 +89,7 @@ where
         Self { key, data }
     }
 
-    fn save(&self) {
+    pub(crate) fn save(&self) {
         S::set(self.key.clone(), &self.data);
     }
 
