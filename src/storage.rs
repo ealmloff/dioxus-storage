@@ -45,7 +45,7 @@ pub fn try_serde_from_string<T: for<'a> Deserialize<'a>>(value: &str) -> Option<
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PersistantStorage {
+pub struct PersistentStorage {
     pub data: Vec<Vec<u8>>,
     pub idx: usize,
 }

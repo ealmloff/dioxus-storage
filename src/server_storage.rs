@@ -7,9 +7,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-static STORAGE: Lazy<PersistantStorageContext<ServerStorage>> = Lazy::new(|| {
+static STORAGE: Lazy<PersistentStorageContext<ServerStorage>> = Lazy::new(|| {
     #[cfg(target_arch = "wasm32")]
-    let storage: Arc<RwLock<PersistantStorage>> = Arc::new(RwLock::new(serde_from_string(
+    let storage: Arc<RwLock<PersistentStorage>> = Arc::new(RwLock::new(serde_from_string(
         &web_sys::window()
             .expect("should have a window")
             .document()
@@ -20,21 +20,21 @@ static STORAGE: Lazy<PersistantStorageContext<ServerStorage>> = Lazy::new(|| {
             .expect("should have a dioxus-storage element with data-serialized attribute"),
     )));
     #[cfg(not(target_arch = "wasm32"))]
-    let storage = Arc::new(RwLock::new(PersistantStorage::default()));
+    let storage = Arc::new(RwLock::new(PersistentStorage::default()));
 
-    PersistantStorageContext {
+    PersistentStorageContext {
         storage,
         ..Default::default()
     }
 });
 
 #[derive(Clone, Debug, Default)]
-pub struct PersistantStorageContext<T> {
-    pub storage: Arc<RwLock<PersistantStorage>>,
+pub struct PersistentStorageContext<T> {
+    pub storage: Arc<RwLock<PersistentStorage>>,
     pub phantom: PhantomData<T>,
 }
 
-impl<C> PersistantStorageContext<C> {
+impl<C> PersistentStorageContext<C> {
     pub fn get<T: for<'a> Deserialize<'a>>(&self) -> Option<T> {
         let mut storage = self.storage.write().ok()?;
         let idx = storage.idx;
