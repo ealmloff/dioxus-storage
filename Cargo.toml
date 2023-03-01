@@ -16,8 +16,15 @@ once_cell = "1.17.0"
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 yazi = "0.1.4"
 wasm-bindgen = "0.2"
+directories = "4.0.1"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories = "4.0.1"
 
 [dev-dependencies]
 dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
 dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
+
+[features]
+hydrate = []
+ssr = []

@@ -1,9 +1,12 @@
 #![allow(unused)]
 use dioxus::prelude::*;
+use once_cell::sync::OnceCell;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cell::{Ref, RefMut};
 use std::fmt::Debug;
+use std::io::Write;
+use std::thread::LocalKey;
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
@@ -15,24 +18,85 @@ use crate::storage::{
     use_synced_storage_entry, StorageBacking, StorageEntry, StorageEntryMut,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+#[macro_export]
+macro_rules! set_dir {
+    () => {
+        $crate::set_dir_name(env!("CARGO_PKG_NAME"));
+    };
+    ($path: literal) => {
+        $crate::set_dir(std::path::PathBuf::from($path));
+    };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
+/// Sets the directory where the storage files are located.
+pub fn set_directory(path: std::path::PathBuf) {
+    LOCATION.set(path).unwrap();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
+pub fn set_dir_name(name: &str) {
+    {
+        set_directory(
+            directories::BaseDirs::new()
+                .unwrap()
+                .data_local_dir()
+                .join(name),
+        )
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+static LOCATION: OnceCell<std::path::PathBuf> = OnceCell::new();
+
+#[cfg(target_arch = "wasm32")]
 fn local_storage() -> Option<Storage> {
     window()?.local_storage().ok()?
 }
 
 fn set<T: Serialize>(key: String, value: &T) {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "ssr"))]
     {
         let as_str = serde_to_string(value);
-        local_storage().unwrap().set_item(&key, &as_str).unwrap();
+        #[cfg(target_arch = "wasm32")]
+        {
+            local_storage().unwrap().set_item(&key, &as_str).unwrap();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = LOCATION
+                .get()
+                .expect("Call the set_dir macro before accessing persistant data");
+            std::fs::create_dir_all(path).unwrap();
+            let file_path = path.join(key);
+            let mut file = std::fs::File::create(file_path).unwrap();
+            file.write_all(as_str.as_bytes()).unwrap();
+        }
     }
 }
 
 fn get<T: DeserializeOwned>(key: &str) -> Option<T> {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "ssr"))]
     {
-        let s: String = local_storage()?.get_item(key).ok()??;
-        return try_serde_from_string(&s);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let s: String = local_storage()?.get_item(key).ok()??;
+            try_serde_from_string(&s)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = LOCATION
+                .get()
+                .expect("Call the set_dir macro before accessing persistant data")
+                .join(key);
+            let s = std::fs::read_to_string(path).ok()?;
+            try_serde_from_string(&s)
+        }
     }
+    #[cfg(feature = "ssr")]
     None
 }
 
@@ -57,11 +121,24 @@ pub fn use_persistent<T: Serialize + DeserializeOwned + Default + 'static>(
     init: impl FnOnce() -> T,
 ) -> &UsePersistent<T> {
     let mut init = Some(init);
+    #[cfg(feature = "ssr")]
     let state = use_ref(cx, || {
         StorageEntry::<ClientStorage, T>::new(key.to_string(), init.take().unwrap()())
     });
-    #[cfg(target_arch = "wasm32")]
-    {
+    // if hydration is not enabled we can just set the storage
+    #[cfg(all(not(feature = "ssr"), not(feature = "hydrate")))]
+    let state = use_ref(cx, || {
+        StorageEntry::new(
+            key.to_string(),
+            storage_entry::<ClientStorage, T>(key.to_string(), init.take().unwrap()),
+        )
+    });
+    // otherwise render the initial value and then hydrate after the first render
+    #[cfg(all(not(feature = "ssr"), feature = "hydrate"))]
+    let state = {
+        let state = use_ref(cx, || {
+            StorageEntry::<ClientStorage, T>::new(key.to_string(), init.take().unwrap()())
+        });
         if cx.generation() == 0 {
             cx.needs_update();
         }
@@ -71,7 +148,9 @@ pub fn use_persistent<T: Serialize + DeserializeOwned + Default + 'static>(
                 storage_entry::<ClientStorage, T>(key.to_string(), init.take().unwrap()),
             ));
         }
-    }
+
+        state
+    };
     cx.use_hook(|| UsePersistent {
         inner: state.clone(),
     })
@@ -136,6 +215,12 @@ impl<T: Serialize + DeserializeOwned + Default + 'static> UsePersistent<T> {
 
     pub fn modify<F: FnOnce(&mut T)>(&self, f: F) {
         f(&mut self.write());
+    }
+}
+
+impl<T: Serialize + DeserializeOwned + Default + Clone + 'static> UsePersistent<T> {
+    pub fn get(&self) -> T {
+        self.read().clone()
     }
 }
 

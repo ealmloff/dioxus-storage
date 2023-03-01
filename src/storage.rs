@@ -7,14 +7,12 @@ use std::ops::{Deref, DerefMut};
 
 pub fn serde_to_string<T: Serialize>(value: &T) -> String {
     let serialized = to_allocvec(value).unwrap();
-    println!("serialized: {:?}", serialized.len());
     let compressed = yazi::compress(
         &serialized,
         yazi::Format::Zlib,
         yazi::CompressionLevel::BestSize,
     )
     .unwrap();
-    println!("compressed: {:?}", compressed.len());
     let as_str: String = compressed
         .iter()
         .flat_map(|u| {
