@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
-use dioxus_storage::use_persistant;
+use dioxus_storage::use_persistent;
 
 fn main() {
     dioxus_web::launch(app)
 }
 
 fn app(cx: Scope) -> Element {
-    let num = use_persistant(cx, "count", || 0);
+    let num = use_persistent(cx, "count", || 0);
     cx.render(rsx! {
         div {
             button {
