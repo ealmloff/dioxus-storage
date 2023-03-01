@@ -14,22 +14,22 @@ use crate::storage::{
     use_synced_storage_entry, StorageBacking, StorageEntry, StorageEntryMut,
 };
 
-fn local_storage() -> Storage {
-    window().unwrap().local_storage().unwrap().unwrap()
+fn local_storage() -> Option<Storage> {
+    window()?.local_storage().ok()?
 }
 
 fn set<T: Serialize>(key: String, value: &T) {
     #[cfg(target_arch = "wasm32")]
     {
         let as_str = serde_to_string(value);
-        local_storage().set_item(&key, &as_str).unwrap();
+        local_storage().unwrap().set_item(&key, &as_str).unwrap();
     }
 }
 
 fn get<T: for<'a> Deserialize<'a>>(key: &str) -> Option<T> {
     #[cfg(target_arch = "wasm32")]
     {
-        let s: String = local_storage().get_item(key).ok()??;
+        let s: String = local_storage()?.get_item(key).ok()??;
         return try_serde_from_string(&s);
     }
     None
