@@ -1,7 +1,7 @@
 use crate::storage::*;
 use once_cell::sync::Lazy;
 use postcard::to_allocvec;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     marker::PhantomData,
     sync::{Arc, RwLock},
@@ -35,7 +35,7 @@ pub struct PersistentStorageContext<T> {
 }
 
 impl<C> PersistentStorageContext<C> {
-    pub fn get<T: for<'a> Deserialize<'a>>(&self) -> Option<T> {
+    pub fn get<T: DeserializeOwned>(&self) -> Option<T> {
         let mut storage = self.storage.write().ok()?;
         let idx = storage.idx;
         storage.idx += 1;
@@ -62,7 +62,7 @@ impl StorageBacking for ServerStorage {
     }
 
     #[allow(clippy::needless_return)]
-    fn get<T: for<'a> Deserialize<'a>>(_: &Self::Key) -> Option<T> {
+    fn get<T: DeserializeOwned>(_: &Self::Key) -> Option<T> {
         #[cfg(target_arch = "wasm32")]
         return STORAGE.get();
         #[cfg(not(target_arch = "wasm32"))]
@@ -83,9 +83,7 @@ pub fn get_data() -> String {
     return "".to_string();
 }
 
-pub fn server_state<T: 'static + Serialize + for<'a> Deserialize<'a>>(
-    init: impl FnOnce() -> T,
-) -> T {
+pub fn server_state<T: 'static + Serialize + DeserializeOwned>(init: impl FnOnce() -> T) -> T {
     storage_entry::<ServerStorage, T>((), init)
 }
 

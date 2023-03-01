@@ -1,5 +1,6 @@
 #![allow(unused)]
 use dioxus::prelude::*;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cell::{Ref, RefMut};
 use std::fmt::Debug;
@@ -26,7 +27,7 @@ fn set<T: Serialize>(key: String, value: &T) {
     }
 }
 
-fn get<T: for<'a> Deserialize<'a>>(key: &str) -> Option<T> {
+fn get<T: DeserializeOwned>(key: &str) -> Option<T> {
     #[cfg(target_arch = "wasm32")]
     {
         let s: String = local_storage()?.get_item(key).ok()??;
@@ -44,17 +45,17 @@ impl StorageBacking for ClientStorage {
         set(key, value);
     }
 
-    fn get<T: for<'a> Deserialize<'a>>(key: &String) -> Option<T> {
+    fn get<T: DeserializeOwned>(key: &String) -> Option<T> {
         get(key)
     }
 }
 
 #[allow(clippy::needless_return)]
-pub fn use_persistent<'a, T: Serialize + for<'b> Deserialize<'b> + Default + 'static>(
-    cx: &'a ScopeState,
+pub fn use_persistent<T: Serialize + DeserializeOwned + Default + 'static>(
+    cx: &ScopeState,
     key: impl ToString,
     init: impl FnOnce() -> T,
-) -> &'a UsePersistent<T> {
+) -> &UsePersistent<T> {
     let mut init = Some(init);
     let state = use_ref(cx, || {
         StorageEntry::<ClientStorage, T>::new(key.to_string(), init.take().unwrap()())
@@ -76,11 +77,11 @@ pub fn use_persistent<'a, T: Serialize + for<'b> Deserialize<'b> + Default + 'st
     })
 }
 
-pub struct StorageRef<'a, T: Serialize + for<'b> Deserialize<'b> + Default + 'static> {
+pub struct StorageRef<'a, T: Serialize + DeserializeOwned + Default + 'static> {
     inner: Ref<'a, StorageEntry<ClientStorage, T>>,
 }
 
-impl<'a, T: Serialize + for<'b> Deserialize<'b> + Default + 'static> Deref for StorageRef<'a, T> {
+impl<'a, T: Serialize + DeserializeOwned + Default + 'static> Deref for StorageRef<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -88,11 +89,11 @@ impl<'a, T: Serialize + for<'b> Deserialize<'b> + Default + 'static> Deref for S
     }
 }
 
-pub struct StorageRefMut<'a, T: Serialize + for<'b> Deserialize<'b> + 'static> {
+pub struct StorageRefMut<'a, T: Serialize + DeserializeOwned + 'static> {
     inner: RefMut<'a, StorageEntry<ClientStorage, T>>,
 }
 
-impl<'a, T: Serialize + for<'b> Deserialize<'b> + 'static> Deref for StorageRefMut<'a, T> {
+impl<'a, T: Serialize + DeserializeOwned + 'static> Deref for StorageRefMut<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -100,23 +101,23 @@ impl<'a, T: Serialize + for<'b> Deserialize<'b> + 'static> Deref for StorageRefM
     }
 }
 
-impl<'a, T: Serialize + for<'b> Deserialize<'b> + 'static> DerefMut for StorageRefMut<'a, T> {
+impl<'a, T: Serialize + DeserializeOwned + 'static> DerefMut for StorageRefMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner.data
     }
 }
 
-impl<'a, T: Serialize + for<'b> Deserialize<'b> + 'static> Drop for StorageRefMut<'a, T> {
+impl<'a, T: Serialize + DeserializeOwned + 'static> Drop for StorageRefMut<'a, T> {
     fn drop(&mut self) {
         self.inner.deref_mut().save();
     }
 }
 
-pub struct UsePersistent<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> {
+pub struct UsePersistent<T: Serialize + DeserializeOwned + Default + 'static> {
     inner: UseRef<StorageEntry<ClientStorage, T>>,
 }
 
-impl<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> UsePersistent<T> {
+impl<T: Serialize + DeserializeOwned + Default + 'static> UsePersistent<T> {
     pub fn read(&self) -> StorageRef<T> {
         StorageRef {
             inner: self.inner.read(),
@@ -138,7 +139,7 @@ impl<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> UsePersistent<T
     }
 }
 
-impl<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> Deref for UsePersistent<T> {
+impl<T: Serialize + DeserializeOwned + Default + 'static> Deref for UsePersistent<T> {
     type Target = UseRef<StorageEntry<ClientStorage, T>>;
 
     fn deref(&self) -> &Self::Target {
@@ -146,7 +147,7 @@ impl<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> Deref for UsePe
     }
 }
 
-impl<T: Serialize + for<'a> Deserialize<'a> + Default + 'static> DerefMut for UsePersistent<T> {
+impl<T: Serialize + DeserializeOwned + Default + 'static> DerefMut for UsePersistent<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }

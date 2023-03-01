@@ -21,17 +21,17 @@ static mut CACHED: Lazy<Storage> = Lazy::new(|| {
 
 pub struct MemoryStorage;
 
-impl<K: Serialize + for<'a> Deserialize<'a>> StorageBacking for MemoryStorage {
+impl<K: Serialize + DeserializeOwned> StorageBacking for MemoryStorage {
     type Key = K;
 
-    fn get<T: for<'a> Deserialize<'a>>(key: &Self::Key) -> Option<T> {}
+    fn get<T: DeserializeOwned>(key: &Self::Key) -> Option<T> {}
 
     fn set<T: Serialize>(key: Self::Key, value: &T) {
         todo!()
     }
 }
 
-pub fn use_temp<T: Serialize + for<'a> Deserialize<'a>>(
+pub fn use_temp<T: Serialize + DeserializeOwned>(
     cx: &ScopeState,
     key: &'static str,
     init: impl FnOnce() -> T,
