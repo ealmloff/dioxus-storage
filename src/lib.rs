@@ -1,5 +1,5 @@
 mod client_storage;
-pub mod storage;
+mod storage;
 
 pub use client_storage::{set_dir_name, set_directory, use_persistent};
 

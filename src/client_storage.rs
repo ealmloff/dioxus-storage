@@ -18,6 +18,17 @@ use crate::storage::{
     use_synced_storage_entry, StorageBacking, StorageEntry, StorageEntryMut,
 };
 
+#[allow(clippy::needless_doctest_main)]
+/// Set the directory where the storage files are located on non-wasm targets.
+///
+/// ```rust
+/// fn main(){
+///     // set the directory to the default location
+///     set_dir!();
+///     // set the directory to a custom location
+///     set_dir!(PathBuf::from("path/to/dir"));
+/// }
+/// ```
 #[cfg(not(target_arch = "wasm32"))]
 #[macro_export]
 macro_rules! set_dir {
@@ -114,6 +125,9 @@ impl StorageBacking for ClientStorage {
     }
 }
 
+/// A persistent storage hook that can be used to store data across application reloads.
+///
+/// Depending on the platform this uses either local storage or a file storage
 #[allow(clippy::needless_return)]
 pub fn use_persistent<T: Serialize + DeserializeOwned + Default + 'static>(
     cx: &ScopeState,
@@ -192,33 +206,39 @@ impl<'a, T: Serialize + DeserializeOwned + 'static> Drop for StorageRefMut<'a, T
     }
 }
 
+/// Storage that persists across application reloads
 pub struct UsePersistent<T: Serialize + DeserializeOwned + Default + 'static> {
     inner: UseRef<StorageEntry<ClientStorage, T>>,
 }
 
 impl<T: Serialize + DeserializeOwned + Default + 'static> UsePersistent<T> {
+    /// Returns a reference to the value
     pub fn read(&self) -> StorageRef<T> {
         StorageRef {
             inner: self.inner.read(),
         }
     }
 
+    /// Returns a mutable reference to the value
     pub fn write(&self) -> StorageRefMut<T> {
         StorageRefMut {
             inner: self.inner.write(),
         }
     }
 
+    /// Sets the value
     pub fn set(&self, value: T) {
         *self.write() = value;
     }
 
+    /// Modifies the value
     pub fn modify<F: FnOnce(&mut T)>(&self, f: F) {
         f(&mut self.write());
     }
 }
 
 impl<T: Serialize + DeserializeOwned + Default + Clone + 'static> UsePersistent<T> {
+    /// Returns a clone of the value
     pub fn get(&self) -> T {
         self.read().clone()
     }

@@ -1,6 +1,6 @@
 [package]
-name = "dioxus-storage"
-version = "0.1.0"
+name = "dioxus_storage"
+version = "0.0.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,7 +8,7 @@ edition = "2021"
 [lib]
 
 [dependencies]
-dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus = "0.3"
 rustc-hash = "1.1.0"
 serde = { version = "1.0.7", features = ["derive"] }
 postcard = { version = "1.0.2", features = ["use-std"] }
@@ -22,8 +22,7 @@ directories = "4.0.1"
 directories = "4.0.1"
 
 [dev-dependencies]
-dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
-dioxus-web = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-desktop = "0.3"
 
 [features]
 hydrate = []
