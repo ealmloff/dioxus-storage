@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
-use dioxus_storage::use_persistent;
+use dioxus_storage::{set_dir, use_persistent};
 
 fn main() {
-    dioxus_web::launch(app)
+    set_dir!();
+    dioxus_desktop::launch(app)
 }
 
 fn app(cx: Scope) -> Element {
