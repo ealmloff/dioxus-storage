@@ -1,6 +1,6 @@
 [package]
 name = "dioxus_storage"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["Evan Almloff <evanalmloff@gmail.com>"]
 description = "A simple storage library for Dioxus"
@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 [lib]
 
 [dependencies]
-dioxus = "0.3"
+dioxus = "0.4"
 rustc-hash = "1.1.0"
 serde = { version = "1.0.7", features = ["derive"] }
 postcard = { version = "1.0.2", features = ["use-std"] }
