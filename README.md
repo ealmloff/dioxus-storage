@@ -26,7 +26,7 @@ A library for handling local storage ergonomically in Dioxus
 ## Usage
 
 ```rust
-use dioxus_storage::use_storage;
+use dioxus_storage::use_persistent;
 use dioxus::prelude::*;
 
 fn main() {
