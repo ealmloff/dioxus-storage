@@ -58,7 +58,8 @@ mod storage;
 #[cfg(not(target_arch = "wasm32"))]
 pub use client_storage::{set_dir_name, set_directory};
 
-pub use client_storage::use_persistent;
+pub use client_storage::{use_persistent, UsePersistent, StorageRef, StorageRefMut, ClientStorage};
+pub use storage::{StorageBacking, StorageEntry};
 
 pub use once_cell;
 pub use postcard;

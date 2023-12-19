@@ -27,7 +27,7 @@ directories = "4.0.1"
 directories = "4.0.1"
 
 [dev-dependencies]
-dioxus-desktop = "0.3"
+dioxus-desktop = "0.4"
 
 [features]
 hydrate = []
